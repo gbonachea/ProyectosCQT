@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="icons/stellarpaquete-16.png">icons/stellarpaquete-16.png</file>
+        <file alias="icons/stellarpaquete-22.png">icons/stellarpaquete-22.png</file>
+        <file alias="icons/stellarpaquete-24.png">icons/stellarpaquete-24.png</file>
+        <file alias="icons/stellarpaquete-32.png">icons/stellarpaquete-32.png</file>
+        <file alias="icons/stellarpaquete-48.png">icons/stellarpaquete-48.png</file>
+        <file alias="icons/stellarpaquete-64.png">icons/stellarpaquete-64.png</file>
+        <file alias="icons/stellarpaquete-128.png">icons/stellarpaquete-128.png</file>
+        <file alias="icons/stellarpaquete-256.png">icons/stellarpaquete-256.png</file>
+    </qresource>
+</RCC>
