@@ -1,4 +1,5 @@
 #include "debbuilder.h"
+#include "desktopbuilder.h"
 
 #include <QDir>
 #include <QFile>
@@ -62,6 +63,22 @@ bool DebBuilder::build(const PackageMetadata &meta, const QString &outputPath)
             return false;
         }
         installedSize += QFileInfo(file.sourcePath).size();
+    }
+
+    if (meta.desktop.generate) {
+        const QString appsDir = rootDir + QStringLiteral("/usr/share/applications");
+        if (!createDirectory(appsDir)) {
+            emit logMessage(QStringLiteral("Error: no se pudo crear el directorio usr/share/applications."));
+            return false;
+        }
+        const QString desktopName = DesktopBuilder::desktopFileName(meta);
+        const QString desktopPath = appsDir + QLatin1Char('/') + desktopName;
+        if (!DesktopBuilder::generateDesktopFile(meta, desktopPath)) {
+            emit logMessage(QStringLiteral("Error: no se pudo generar el archivo .desktop."));
+            return false;
+        }
+        installedSize += QFileInfo(desktopPath).size();
+        emit logMessage(QStringLiteral("Archivo .desktop incluido: usr/share/applications/%1").arg(desktopName));
     }
 
     const QString controlPath = debianDir + QStringLiteral("/control");

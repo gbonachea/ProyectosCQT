@@ -46,7 +46,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 void MainWindow::setupUi()
 {
-    setWindowTitle(QStringLiteral("Stellar Paquete — Creador de paquetes .deb, .rpm y .AppImage"));
+    setWindowTitle(QStringLiteral("Stellar Paquete — Creador de paquetes .deb, .rpm y Arch Linux"));
     resize(820, 580);
 
     QPushButton *aboutButton = new QPushButton(QStringLiteral("Acerca de..."), this);
@@ -167,8 +167,8 @@ void MainWindow::setupDependenciesTab(QWidget *tab)
     QLabel *hint = new QLabel(
         QStringLiteral("Paquetes del repositorio del sistema que deben instalarse junto con este paquete "
                        "(se escriben como \"Depends:\" en .deb y como \"Requires:\" en .rpm).\n"
-                       "Los nombres deben corresponder al repositorio de cada formato. Los AppImage son "
-                       "autocontenidos y no usan esta lista."),
+                       "Los nombres deben corresponder al repositorio de cada formato. Los paquetes Arch Linux "
+                       "usan las dependencias en el PKGBUILD como \"depends=()\"."),
         tab);
     hint->setWordWrap(true);
     layout->addWidget(hint);
@@ -241,9 +241,20 @@ void MainWindow::setupDesktopTab(QWidget *tab)
     m_desktopIconEdit->setPlaceholderText(QStringLiteral("Por defecto: nombre del paquete"));
     form->addRow(QStringLiteral("Icon:"), m_desktopIconEdit);
 
-    m_desktopCategoriesEdit = new QLineEdit(desktopBox);
-    m_desktopCategoriesEdit->setText(QStringLiteral("Utility;"));
-    form->addRow(QStringLiteral("Categories:"), m_desktopCategoriesEdit);
+    m_desktopCategoriesList = new QListWidget(desktopBox);
+    m_desktopCategoriesList->setMaximumHeight(120);
+    const QStringList xdgCategories = {
+        QStringLiteral("AudioVideo"), QStringLiteral("Audio"), QStringLiteral("Video"),
+        QStringLiteral("Development"), QStringLiteral("Education"), QStringLiteral("Game"),
+        QStringLiteral("Graphics"), QStringLiteral("Network"), QStringLiteral("Office"),
+        QStringLiteral("Settings"), QStringLiteral("System"), QStringLiteral("Utility")
+    };
+    for (const QString &cat : xdgCategories) {
+        QListWidgetItem *item = new QListWidgetItem(cat, m_desktopCategoriesList);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(cat == QStringLiteral("Utility") ? Qt::Checked : Qt::Unchecked);
+    }
+    form->addRow(QStringLiteral("Categories:"), m_desktopCategoriesList);
 
     m_desktopMimeEdit = new QLineEdit(desktopBox);
     m_desktopMimeEdit->setPlaceholderText(QStringLiteral("Opcional, ej. text/html;text/plain;"));
@@ -283,11 +294,11 @@ void MainWindow::setupFormatTab(QWidget *tab)
     QVBoxLayout *formatLayout = new QVBoxLayout(formatBox);
     m_debCheck = new QCheckBox(QStringLiteral("Paquete Debian (.deb) — requiere dpkg-deb"), formatBox);
     m_rpmCheck = new QCheckBox(QStringLiteral("Paquete Red Hat (.rpm) — requiere rpmbuild"), formatBox);
-    m_appImageCheck = new QCheckBox(QStringLiteral("AppImage — requiere appimagetool o linuxdeploy"), formatBox);
+    m_archLinuxCheck = new QCheckBox(QStringLiteral("Paquete Arch Linux (.pkg.tar.zst) — requiere makepkg"), formatBox);
     m_debCheck->setChecked(true);
     formatLayout->addWidget(m_debCheck);
     formatLayout->addWidget(m_rpmCheck);
-    formatLayout->addWidget(m_appImageCheck);
+    formatLayout->addWidget(m_archLinuxCheck);
     layout->addWidget(formatBox);
 
     QGroupBox *outputBox = new QGroupBox(QStringLiteral("Directorio de salida"), tab);
@@ -365,20 +376,17 @@ void MainWindow::checkDependencies()
         appendLog(QStringLiteral("Advertencia: \"rpmbuild\" no encontrado. La opción .rpm se ha deshabilitado."));
     }
 
-    const bool hasAppImageTool = PackageBuilder::toolAvailable(QStringLiteral("appimagetool"));
-    const bool hasLinuxDeploy = PackageBuilder::toolAvailable(QStringLiteral("linuxdeploy"));
-    m_appImageCheck->setEnabled(hasAppImageTool || hasLinuxDeploy);
-    if (!hasAppImageTool && !hasLinuxDeploy) {
-        m_appImageCheck->setChecked(false);
-        appendLog(QStringLiteral("Advertencia: ni \"appimagetool\" ni \"linuxdeploy\" encontrados. "
-                                 "La opción .AppImage se ha deshabilitado."));
+    const bool hasMakepkg = PackageBuilder::toolAvailable(QStringLiteral("makepkg"));
+    m_archLinuxCheck->setEnabled(hasMakepkg);
+    if (!hasMakepkg) {
+        m_archLinuxCheck->setChecked(false);
+        appendLog(QStringLiteral("Advertencia: \"makepkg\" no encontrado. La opción Arch Linux se ha deshabilitado."));
     }
 
-    appendLog(QStringLiteral("dpkg-deb: %1 | rpmbuild: %2 | appimagetool: %3 | linuxdeploy: %4")
+    appendLog(QStringLiteral("dpkg-deb: %1 | rpmbuild: %2 | makepkg: %3")
                   .arg(hasDpkg ? QStringLiteral("sí") : QStringLiteral("no"),
                        hasRpmbuild ? QStringLiteral("sí") : QStringLiteral("no"),
-                       hasAppImageTool ? QStringLiteral("sí") : QStringLiteral("no"),
-                       hasLinuxDeploy ? QStringLiteral("sí") : QStringLiteral("no")));
+                       hasMakepkg ? QStringLiteral("sí") : QStringLiteral("no")));
 }
 
 void MainWindow::addFileToTree(const QString &source, const QString &target)
@@ -538,7 +546,7 @@ QString MainWindow::installDependenciesScript() const
         R"SCRIPT(#!/usr/bin/env bash
 set -e
 
-echo "=== Instalando herramientas para generar paquetes (.deb, .rpm, .AppImage) ==="
+echo "=== Instalando herramientas para generar paquetes (.deb, .rpm, Arch Linux) ==="
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Este script debe ejecutarse como root (usa: sudo bash install-dependencies.sh)"
@@ -591,61 +599,6 @@ download() {
     fi
 }
 
-install_appimage_tools() {
-    local tmp=/tmp/paquete-appimage
-    rm -rf "$tmp" && mkdir -p "$tmp" && cd "$tmp" || return 1
-
-    if ! has appimagetool; then
-        echo "Descargando appimagetool..."
-        download "https://github.com/AppImage/appimagetool/releases/latest/download/appimagetool-x86_64.AppImage" appimagetool.AppImage || return 1
-        chmod +x appimagetool.AppImage
-        if ./appimagetool.AppImage --appimage-extract >/dev/null 2>&1; then
-            install -m 0755 squashfs-root/appimagetool /usr/local/bin/appimagetool
-            rm -rf squashfs-root
-        else
-            install -m 0755 appimagetool.AppImage /usr/local/bin/appimagetool
-        fi
-        rm -f appimagetool.AppImage
-        echo "appimagetool instalado."
-    else
-        echo "appimagetool ya está instalado."
-    fi
-
-    if ! has linuxdeploy; then
-        echo "Descargando linuxdeploy..."
-        download "https://github.com/linuxdeploy/linuxdeploy/releases/latest/download/linuxdeploy-x86_64.AppImage" linuxdeploy.AppImage || return 1
-        chmod +x linuxdeploy.AppImage
-        if ./linuxdeploy.AppImage --appimage-extract >/dev/null 2>&1; then
-            install -m 0755 squashfs-root/AppRun /usr/local/bin/linuxdeploy
-            rm -rf squashfs-root
-        else
-            install -m 0755 linuxdeploy.AppImage /usr/local/bin/linuxdeploy
-        fi
-        rm -f linuxdeploy.AppImage
-        echo "linuxdeploy instalado."
-    else
-        echo "linuxdeploy ya está instalado."
-    fi
-
-    if ! has linuxdeploy-plugin-appimage; then
-        echo "Descargando linuxdeploy-plugin-appimage..."
-        download "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/latest/download/linuxdeploy-plugin-appimage-x86_64.AppImage" plugin.AppImage || return 1
-        chmod +x plugin.AppImage
-        if ./plugin.AppImage --appimage-extract >/dev/null 2>&1; then
-            install -m 0755 squashfs-root/AppRun /usr/local/bin/linuxdeploy-plugin-appimage
-            rm -rf squashfs-root
-        else
-            install -m 0755 plugin.AppImage /usr/local/bin/linuxdeploy-plugin-appimage
-        fi
-        rm -f plugin.AppImage
-        echo "linuxdeploy-plugin-appimage instalado."
-    else
-        echo "linuxdeploy-plugin-appimage ya está instalado."
-    fi
-
-    rm -rf "$tmp"
-}
-
 echo "--- dpkg-deb (.deb) ---"
 if ! has dpkg-deb; then
     install_pkg dpkg-dev || install_pkg dpkg
@@ -660,12 +613,27 @@ else
     echo "rpmbuild ya está instalado."
 fi
 
-echo "--- Herramientas AppImage ---"
-install_appimage_tools || echo "AVISO: la instalación de las herramientas AppImage no se completó."
+echo "--- makepkg (Arch Linux) ---"
+if ! has makepkg; then
+    if is arch manjaro EndeavourOS garuda; then
+        echo "makepkg debería venir con el sistema base. Instalando base-devel..."
+        install_pkg base-devel
+    elif is fedora; then
+        echo "makepkg no está disponible directamente en Fedora. Instalando pacman desde AUR o usa un contenedor Arch."
+        echo "AVISO: makepkg requiere un sistema Arch Linux o derivado."
+    elif is debian ubuntu; then
+        echo "makepkg no está disponible directamente en Debian/Ubuntu."
+        echo "Puedes usar un contenedor Arch: docker run -it archlinux base-devel"
+    else
+        echo "makepkg requiere un sistema Arch Linux o derivado."
+    fi
+else
+    echo "makepkg ya está instalado."
+fi
 
 echo
 echo "=== Verificación final ==="
-for t in dpkg-deb rpmbuild appimagetool linuxdeploy; do
+for t in dpkg-deb rpmbuild makepkg; do
     if has "$t"; then
         echo "OK    $t"
     else
@@ -749,7 +717,7 @@ void MainWindow::showAbout()
     QMessageBox::about(this, QStringLiteral("Acerca de Stellar Paquete"),
                        QStringLiteral("<h3>Stellar Paquete %1</h3>"
                                       "<p>Herramienta de escritorio para crear paquetes de software "
-                                      "<b>.deb</b>, <b>.rpm</b> y <b>.AppImage</b>.</p>"
+                                       "<b>.deb</b>, <b>.rpm</b> y <b>Arch Linux (.pkg.tar.zst)</b>.</p>"
                                       "<p>Permite definir los metadatos del paquete, mapear los archivos "
                                       "de instalación, declarar las dependencias que debe resolver el "
                                       "sistema y generar los paquetes directamente desde la interfaz.</p>"
@@ -782,15 +750,23 @@ PackageMetadata MainWindow::collectMetadata() const
         meta.formats << QStringLiteral("deb");
     if (m_rpmCheck->isChecked())
         meta.formats << QStringLiteral("rpm");
-    if (m_appImageCheck->isChecked())
-        meta.formats << QStringLiteral("appimage");
+    if (m_archLinuxCheck->isChecked())
+        meta.formats << QStringLiteral("arch");
 
     meta.desktop.generate = m_desktopCheck->isChecked();
     meta.desktop.name = m_desktopNameEdit->text().trimmed();
     meta.desktop.comment = m_desktopCommentEdit->text().trimmed();
     meta.desktop.exec = m_desktopExecEdit->text().trimmed();
     meta.desktop.icon = m_desktopIconEdit->text().trimmed();
-    meta.desktop.categories = m_desktopCategoriesEdit->text().trimmed();
+    QStringList checkedCategories;
+    for (int i = 0; i < m_desktopCategoriesList->count(); ++i) {
+        QListWidgetItem *item = m_desktopCategoriesList->item(i);
+        if (item->checkState() == Qt::Checked)
+            checkedCategories.append(item->text());
+    }
+    meta.desktop.categories = checkedCategories.join(QLatin1Char(';'));
+    if (!meta.desktop.categories.isEmpty())
+        meta.desktop.categories += QLatin1Char(';');
     meta.desktop.mimeTypes = m_desktopMimeEdit->text().trimmed();
     meta.desktop.terminal = m_desktopTerminalCheck->isChecked();
     meta.desktop.startupNotify = m_desktopStartupCheck->isChecked();

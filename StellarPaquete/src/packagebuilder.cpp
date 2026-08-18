@@ -7,7 +7,7 @@
 #include <QProcess>
 #include <QStandardPaths>
 
-#include "appimagebuilder.h"
+#include "archbuilder.h"
 #include "debbuilder.h"
 #include "desktopbuilder.h"
 #include "rpmbuilder.h"
@@ -29,8 +29,8 @@ PackageBuilder *PackageBuilder::createBuilder(const QString &format, QObject *pa
         return new DebBuilder(parent);
     if (f == QStringLiteral("rpm"))
         return new RpmBuilder(parent);
-    if (f == QStringLiteral("appimage"))
-        return new AppImageBuilder(parent);
+    if (f == QStringLiteral("arch"))
+        return new ArchBuilder(parent);
     if (f == QStringLiteral("desktop"))
         return new DesktopBuilder(parent);
     return nullptr;

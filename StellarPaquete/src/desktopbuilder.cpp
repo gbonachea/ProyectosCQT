@@ -12,7 +12,19 @@ DesktopBuilder::DesktopBuilder(QObject *parent)
 {
 }
 
-bool DesktopBuilder::build(const PackageMetadata &meta, const QString &outputPath)
+QString DesktopBuilder::desktopFileName(const PackageMetadata &meta)
+{
+    const QString name = meta.desktop.name.trimmed().isEmpty()
+                             ? meta.name.trimmed()
+                             : meta.desktop.name.trimmed();
+    QString fileName = name;
+    fileName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9.+-]")), QStringLiteral("-"));
+    if (!fileName.endsWith(QStringLiteral(".desktop")))
+        fileName += QStringLiteral(".desktop");
+    return fileName;
+}
+
+bool DesktopBuilder::generateDesktopFile(const PackageMetadata &meta, const QString &filePath)
 {
     const QString name = meta.desktop.name.trimmed().isEmpty()
                              ? meta.name.trimmed()
@@ -30,20 +42,9 @@ bool DesktopBuilder::build(const PackageMetadata &meta, const QString &outputPat
                                    ? QStringLiteral("Utility;")
                                    : meta.desktop.categories.trimmed();
 
-    QString fileName = name;
-    fileName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9.+-]")), QStringLiteral("-"));
-    if (!fileName.endsWith(QStringLiteral(".desktop")))
-        fileName += QStringLiteral(".desktop");
-
-    const QString out = QDir(outputPath).filePath(fileName);
-    if (QFileInfo::exists(out))
-        QFile::remove(out);
-
-    QFile file(out);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        emit logMessage(QStringLiteral("Error: no se pudo escribir \"%1\".").arg(out));
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
         return false;
-    }
 
     QTextStream stream(&file);
     stream << "[Desktop Entry]\n";
@@ -62,7 +63,16 @@ bool DesktopBuilder::build(const PackageMetadata &meta, const QString &outputPat
     stream << "Categories=" << categories << '\n';
     stream.flush();
 
-    if (file.error() != QFileDevice::NoError) {
+    return file.error() == QFileDevice::NoError;
+}
+
+bool DesktopBuilder::build(const PackageMetadata &meta, const QString &outputPath)
+{
+    const QString out = QDir(outputPath).filePath(desktopFileName(meta));
+    if (QFileInfo::exists(out))
+        QFile::remove(out);
+
+    if (!generateDesktopFile(meta, out)) {
         emit logMessage(QStringLiteral("Error: no se pudo escribir el archivo .desktop."));
         return false;
     }

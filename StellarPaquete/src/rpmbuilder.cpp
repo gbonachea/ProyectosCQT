@@ -1,4 +1,5 @@
 #include "rpmbuilder.h"
+#include "desktopbuilder.h"
 
 #include <QDate>
 #include <QDir>
@@ -65,6 +66,21 @@ bool RpmBuilder::build(const PackageMetadata &meta, const QString &outputPath)
                                 .arg(file.sourcePath, dest));
             return false;
         }
+    }
+
+    if (meta.desktop.generate) {
+        const QString appsDir = stagingDir + QStringLiteral("/usr/share/applications");
+        if (!createDirectory(appsDir)) {
+            emit logMessage(QStringLiteral("Error: no se pudo crear el directorio usr/share/applications."));
+            return false;
+        }
+        const QString desktopName = DesktopBuilder::desktopFileName(meta);
+        const QString desktopPath = appsDir + QLatin1Char('/') + desktopName;
+        if (!DesktopBuilder::generateDesktopFile(meta, desktopPath)) {
+            emit logMessage(QStringLiteral("Error: no se pudo generar el archivo .desktop."));
+            return false;
+        }
+        emit logMessage(QStringLiteral("Archivo .desktop incluido: usr/share/applications/%1").arg(desktopName));
     }
 
     const QString arch = rpmArch(meta.architecture);
@@ -143,6 +159,8 @@ bool RpmBuilder::writeSpecFile(const QString &specPath, const PackageMetadata &m
             continue;
         out << '/' << rel << '\n';
     }
+    if (meta.desktop.generate)
+        out << "/usr/share/applications/" << DesktopBuilder::desktopFileName(meta) << '\n';
 
     out << '\n' << "%clean\n";
     out << "rm -rf %{buildroot}\n";

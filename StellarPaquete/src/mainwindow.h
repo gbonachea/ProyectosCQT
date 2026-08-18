@@ -74,14 +74,14 @@ private:
     QLineEdit *m_desktopCommentEdit = nullptr;
     QLineEdit *m_desktopExecEdit = nullptr;
     QLineEdit *m_desktopIconEdit = nullptr;
-    QLineEdit *m_desktopCategoriesEdit = nullptr;
+    QListWidget *m_desktopCategoriesList = nullptr;
     QLineEdit *m_desktopMimeEdit = nullptr;
     QCheckBox *m_desktopTerminalCheck = nullptr;
     QCheckBox *m_desktopStartupCheck = nullptr;
 
     QCheckBox *m_debCheck = nullptr;
     QCheckBox *m_rpmCheck = nullptr;
-    QCheckBox *m_appImageCheck = nullptr;
+    QCheckBox *m_archLinuxCheck = nullptr;
     QLineEdit *m_outputDirEdit = nullptr;
 
     QTextEdit *m_logEdit = nullptr;

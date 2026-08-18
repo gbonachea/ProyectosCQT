@@ -18,7 +18,7 @@ set(SOURCES
     src/packagebuilder.cpp
     src/debbuilder.cpp
     src/rpmbuilder.cpp
-    src/appimagebuilder.cpp
+    src/archbuilder.cpp
     src/desktopbuilder.cpp
 )
 
@@ -28,7 +28,7 @@ set(HEADERS
     src/packagebuilder.h
     src/debbuilder.h
     src/rpmbuilder.h
-    src/appimagebuilder.h
+    src/archbuilder.h
     src/desktopbuilder.h
 )
 
